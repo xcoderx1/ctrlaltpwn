@@ -1,0 +1,5 @@
+(Get-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Environment\" -v Path | select -ExpandProperty Path) -split ";" | foreach{
+
+icacls.exe $_
+
+}
