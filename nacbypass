@@ -1,0 +1,30 @@
+settings> network > USB 10/100/1000 LAN> ipv4 &ipv6 off > 802.1x off as well.
+on mac terminal 
+networksetup -setv6off "USB 10/100/1000 LAN"
+
+ Got to vmware and do host only mode then:
+┌──(root㉿sbt)-[~]
+└─# ps aux | grep -i wpa
+root      150965  0.0  0.0   3504  1792 pts/0    S+   10:13   0:00 grep --color=auto -i wpa
+                                                                                                                            
+┌──(root㉿sbt)-[~]
+└─# ps aux | grep -i dhcl
+root      150988  0.0  0.0   3504  1792 pts/0    S+   10:13   0:00 grep --color=auto -i dhcl
+
+
+┌──(root㉿sbt)-[~]
+└─# killall -9 dhclient
+dhclient: no process found
+                                                                                                                            
+┌──(root㉿sbt)-[~]
+└─# killall -9 wpa_supplicant
+wpa_supplicant: no process found
+                                                                                                                            
+┌──(root㉿sbt)-[~]
+└─# 
+
+service network-manager stop
+
+echo 1 > /proc/sys/net/ipv6/conf/all/disable_ipv6
+
+
