@@ -3,3 +3,11 @@
 icacls.exe $_
 
 }
+
+
+
+if($true){
+ 
+paste here
+ 
+}
