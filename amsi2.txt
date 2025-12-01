@@ -13,3 +13,10 @@ powershell -NoP -Exec Bypass -C "$P=$pwd.path; $TEST_DIR='C:\Windows\Temp\Window
 
 
 powershell -version 2 -NoP -Exec Bypass -C "$ExecutionContext.SessionState.LanguageMode"
+
+
+# 1. Test MSBuild.exe
+& 'C:\Windows\Microsoft.NET\Framework64\v4.0.30319\MSBuild.exe' /?
+
+# 2. Test InstallUtil.exe
+& 'C:\Windows\Microsoft.NET\Framework64\v4.0.30319\InstallUtil.exe' /?
