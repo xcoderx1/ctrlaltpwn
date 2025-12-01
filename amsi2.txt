@@ -20,3 +20,6 @@ powershell -version 2 -NoP -Exec Bypass -C "$ExecutionContext.SessionState.Langu
 
 # 2. Test InstallUtil.exe
 & 'C:\Windows\Microsoft.NET\Framework64\v4.0.30319\InstallUtil.exe' /?
+
+
+cmd /c wscript.exe C:\Windows\System32\cmd.exe /c "echo SUCCESS: Non-PowerShell Command Execution is working"
