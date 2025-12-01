@@ -191,3 +191,200 @@ class Program
 
 
 
+==============
+
+
+
+
+
+# AmsiHarness.ps1
+
+if ($ExecutionContext.SessionState.LanguageMode -ne 'FullLanguage') {
+    Write-Warning "This harness requires FullLanguage mode. Current mode: $($ExecutionContext.SessionState.LanguageMode)"
+    return
+}
+
+$amsiCode = @"
+using System;
+using System.Runtime.InteropServices;
+using System.Text;
+
+public static class AmsiHarness
+{
+    [DllImport("amsi.dll", CharSet = CharSet.Unicode)]
+    public static extern int AmsiInitialize(string appName, out IntPtr amsiContext);
+
+    [DllImport("amsi.dll")]
+    public static extern void AmsiUninitialize(IntPtr amsiContext);
+
+    [DllImport("amsi.dll", CharSet = CharSet.Unicode)]
+    public static extern int AmsiOpenSession(IntPtr amsiContext, out IntPtr session);
+
+    [DllImport("amsi.dll")]
+    public static extern void AmsiCloseSession(IntPtr amsiContext, IntPtr session);
+
+    [DllImport("amsi.dll", CharSet = CharSet.Unicode)]
+    public static extern int AmsiScanBuffer(
+        IntPtr amsiContext,
+        byte[] buffer,
+        uint length,
+        string contentName,
+        IntPtr session,
+        out uint result);
+}
+"@
+
+Add-Type -TypeDefinition $amsiCode
+
+function Invoke-AmsiScanString {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory, ValueFromPipeline)]
+        [string]$InputString,
+
+        [string]$Name = "StringContent"
+    )
+
+    begin {
+        $script:ctx = [IntPtr]::Zero
+        $script:session = [IntPtr]::Zero
+
+        $hr = [AmsiHarness]::AmsiInitialize("PS-AmsiHarness", [ref]$script:ctx)
+        if ($hr -ne 0) { throw "AmsiInitialize failed: 0x{0:X8}" -f $hr }
+
+        $hr = [AmsiHarness]::AmsiOpenSession($script:ctx, [ref]$script:session)
+        if ($hr -ne 0) { throw "AmsiOpenSession failed: 0x{0:X8}" -f $hr }
+    }
+
+    process {
+        $bytes = [System.Text.Encoding]::Unicode.GetBytes($InputString)
+        $scanResult = 0u
+
+        $hr = [AmsiHarness]::AmsiScanBuffer(
+            $script:ctx,
+            $bytes,
+            [uint32]$bytes.Length,
+            $Name,
+            $script:session,
+            [ref]$scanResult
+        )
+
+        [pscustomobject]@{
+            Type        = 'String'
+            Name        = $Name
+            HResultHex  = ('0x{0:X8}' -f $hr)
+            AmsiResult  = ('0x{0:X8}' -f $scanResult)
+        }
+    }
+
+    end {
+        if ($script:session -ne [IntPtr]::Zero) {
+            [AmsiHarness]::AmsiCloseSession($script:ctx, $script:session)
+        }
+        if ($script:ctx -ne [IntPtr]::Zero) {
+            [AmsiHarness]::AmsiUninitialize($script:ctx)
+        }
+    }
+}
+
+function Invoke-AmsiScanFile {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory, ValueFromPipeline, ValueFromPipelineByPropertyName)]
+        [Alias('FullName')]
+        [string]$Path
+    )
+
+    process {
+        if (-not (Test-Path -LiteralPath $Path)) {
+            Write-Warning "File not found: $Path"
+            return
+        }
+
+        $content = Get-Content -LiteralPath $Path -Raw -ErrorAction Stop
+        Invoke-AmsiScanString -InputString $content -Name $Path
+    }
+}
+
+
+
+================
+
+
+function Invoke-AmsiFolderScan {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string]$Path,
+
+        [string[]]$Include = @('*.ps1','*.psm1','*.psd1','*.vbs','*.js','*.wsf'),
+
+        [switch]$Recurse,
+
+        [string]$OutCsv
+    )
+
+    if (-not (Test-Path -LiteralPath $Path)) {
+        throw "Folder not found: $Path"
+    }
+
+    $files = foreach ($pattern in $Include) {
+        Get-ChildItem -LiteralPath $Path -Filter $pattern -File -ErrorAction SilentlyContinue -Recurse:$Recurse
+    } | Sort-Object -Property FullName -Unique
+
+    if (-not $files) {
+        Write-Host "No matching files found." -ForegroundColor Yellow
+        return
+    }
+
+    $results = $files | Invoke-AmsiScanFile
+
+    if ($OutCsv) {
+        $results | Export-Csv -NoTypeInformation -Path $OutCsv -Encoding UTF8
+        Write-Host "Results written to $OutCsv"
+    } else {
+        $results
+    }
+}
+
+
+==============
+
+function Test-AmsiIntegration {
+    [CmdletBinding()]
+    param(
+        [string]$TestString = 'Write-Host "TestStringFromAmsiHealthCheck"'
+    )
+
+    Write-Host "[*] Running AMSI health check..." -ForegroundColor Cyan
+    $mode = $ExecutionContext.SessionState.LanguageMode
+    Write-Host "    LanguageMode: $mode"
+
+    try {
+        $ps = [System.Management.Automation.PowerShell]::Create()
+        $null = $ps.AddScript($TestString)
+        $output = $ps.Invoke()
+
+        if ($ps.Streams.Error.Count -gt 0) {
+            Write-Warning "Errors during execution (these may or may not be AMSI related):"
+            $ps.Streams.Error | ForEach-Object { $_.ToString() }
+        } else {
+            Write-Host "Script executed. AMSI did not block it (which is expected for benign content)." -ForegroundColor Green
+        }
+
+        [pscustomobject]@{
+            LanguageMode = $mode
+            Output       = $output | Out-String
+            ErrorCount   = $ps.Streams.Error.Count
+        }
+    }
+    finally {
+        if ($ps) { $ps.Dispose() }
+    }
+}
+
+
+==============
+
+
+
