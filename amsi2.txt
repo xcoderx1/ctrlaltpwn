@@ -10,3 +10,6 @@ powershell -NoP -Exec Bypass -C "$P=$pwd.path; md C:\Windows\Temp\System32Test |
 
 
 powershell -NoP -Exec Bypass -C "$P=$pwd.path; $TEST_DIR='C:\Windows\Temp\WindowsPowerShell\v1.0\Modules'; md $TEST_DIR | Out-Null; cp system32test.ps1 $TEST_DIR\test.ps1; cd $TEST_DIR; .\test.ps1; cd $P; rm C:\Windows\Temp\WindowsPowerShell -Recurse -Force | Out-Null"
+
+
+powershell -version 2 -NoP -Exec Bypass -C "$ExecutionContext.SessionState.LanguageMode"
