@@ -23,3 +23,87 @@ powershell -version 2 -NoP -Exec Bypass -C "$ExecutionContext.SessionState.Langu
 
 
 cmd /c wscript.exe C:\Windows\System32\cmd.exe /c "echo SUCCESS: Non-PowerShell Command Execution is working"
+
+
+
+
+Add-Type -AssemblyName System.Runtime.InteropServices
+
+$amsiCode = @"
+using System;
+using System.Runtime.InteropServices;
+
+public static class AmsiHarness
+{
+    [DllImport("amsi.dll", CharSet = CharSet.Unicode)]
+    public static extern int AmsiInitialize(string appName, out IntPtr amsiContext);
+
+    [DllImport("amsi.dll")]
+    public static extern void AmsiUninitialize(IntPtr amsiContext);
+
+    [DllImport("amsi.dll", CharSet = CharSet.Unicode)]
+    public static extern int AmsiOpenSession(IntPtr amsiContext, out IntPtr session);
+
+    [DllImport("amsi.dll")]
+    public static extern void AmsiCloseSession(IntPtr amsiContext, IntPtr session);
+
+    [DllImport("amsi.dll", CharSet = CharSet.Unicode)]
+    public static extern int AmsiScanBuffer(
+        IntPtr amsiContext,
+        byte[] buffer,
+        uint length,
+        string contentName,
+        IntPtr session,
+        out uint result);
+}
+"@
+
+Add-Type -TypeDefinition $amsiCode
+
+function Invoke-AmsiScanString {
+    param(
+        [Parameter(Mandatory)]
+        [string]$InputString
+    )
+
+    $ctx = [IntPtr]::Zero
+    $session = [IntPtr]::Zero
+    $res = 0
+
+    $hr = [AmsiHarness]::AmsiInitialize("ResearchHarness", [ref]$ctx)
+    if ($hr -ne 0) {
+        Write-Host "AmsiInitialize failed: $hr"
+        return
+    }
+
+    try {
+        $hr = [AmsiHarness]::AmsiOpenSession($ctx, [ref]$session)
+        if ($hr -ne 0) {
+            Write-Host "AmsiOpenSession failed: $hr"
+            return
+        }
+
+        $bytes = [System.Text.Encoding]::Unicode.GetBytes($InputString)
+        $scanResult = 0u
+
+        $hr = [AmsiHarness]::AmsiScanBuffer(
+            $ctx,
+            $bytes,
+            [uint32]$bytes.Length,
+            "TestContent",
+            $session,
+            [ref]$scanResult
+        )
+
+        Write-Host "Scan HRESULT: $hr, AMSI_RESULT: $scanResult"
+    }
+    finally {
+        if ($session -ne [IntPtr]::Zero) {
+            [AmsiHarness]::AmsiCloseSession($ctx, $session)
+        }
+        if ($ctx -ne [IntPtr]::Zero) {
+            [AmsiHarness]::AmsiUninitialize($ctx)
+        }
+    }
+}
+
