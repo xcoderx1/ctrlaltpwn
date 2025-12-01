@@ -107,3 +107,87 @@ function Invoke-AmsiScanString {
     }
 }
 
+
+
+
+
+using System;
+using System.Runtime.InteropServices;
+using System.Text;
+
+class Program
+{
+    private static class AmsiHarness
+    {
+        [DllImport("amsi.dll", CharSet = CharSet.Unicode)]
+        public static extern int AmsiInitialize(string appName, out IntPtr amsiContext);
+
+        [DllImport("amsi.dll")]
+        public static extern void AmsiUninitialize(IntPtr amsiContext);
+
+        [DllImport("amsi.dll", CharSet = CharSet.Unicode)]
+        public static extern int AmsiOpenSession(IntPtr amsiContext, out IntPtr session);
+
+        [DllImport("amsi.dll")]
+        public static extern void AmsiCloseSession(IntPtr amsiContext, IntPtr session);
+
+        [DllImport("amsi.dll", CharSet = CharSet.Unicode)]
+        public static extern int AmsiScanBuffer(
+            IntPtr amsiContext,
+            byte[] buffer,
+            uint length,
+            string contentName,
+            IntPtr session,
+            out uint result);
+    }
+
+    static void Main(string[] args)
+    {
+        Console.Write("Enter string to scan: ");
+        string input = Console.ReadLine() ?? string.Empty;
+
+        IntPtr ctx = IntPtr.Zero;
+        IntPtr session = IntPtr.Zero;
+        uint result;
+
+        int hr = AmsiHarness.AmsiInitialize("ResearchHarness", out ctx);
+        if (hr != 0)
+        {
+            Console.WriteLine($"AmsiInitialize failed: 0x{hr:X8}");
+            return;
+        }
+
+        try
+        {
+            hr = AmsiHarness.AmsiOpenSession(ctx, out session);
+            if (hr != 0)
+            {
+                Console.WriteLine($"AmsiOpenSession failed: 0x{hr:X8}");
+                return;
+            }
+
+            byte[] bytes = Encoding.Unicode.GetBytes(input);
+            hr = AmsiHarness.AmsiScanBuffer(
+                ctx,
+                bytes,
+                (uint)bytes.Length,
+                "TestContent",
+                session,
+                out result
+            );
+
+            Console.WriteLine($"Scan HRESULT: 0x{hr:X8}, AMSI_RESULT: 0x{result:X8}");
+        }
+        finally
+        {
+            if (session != IntPtr.Zero)
+                AmsiHarness.AmsiCloseSession(ctx, session);
+            if (ctx != IntPtr.Zero)
+                AmsiHarness.AmsiUninitialize(ctx);
+        }
+    }
+}
+
+
+
+
